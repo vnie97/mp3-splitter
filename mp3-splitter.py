@@ -1,7 +1,8 @@
 import soundfile as sf
+from pathlib import Path
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
-import numpy as np
 
 # User input
 INPUT_TIME = 6*60+5 # seconds
@@ -9,6 +10,23 @@ INPUT_DURATION = 16 # seconds
 INPUT_RMS = 500     # samples - for calculating moving average
 INPUT_THRESHOLD = -60  # dB
 INPUT_MINIMUM_LENGTH = 1/10 # seconds
+
+class AudioSplitter:
+    """
+    Splits an mp3 audio file containing speech into a number of individual mp3 chunks. Splits are optimized for the silent intervals between words.
+    Args:
+        n_chunks: Number of individual chunks. Integer value.
+        max_chunk_duration: Maximum duration of each chunk. Float value in seconds.
+    """
+    def __init__(self, file_path: str|Path, *, n_chunks: int|None=None, max_chunk_duration: float|None=None):
+        self.file_path = file_path
+        self.audio, self.sample_rate = sf.read(self.file_path)
+        # TODO: add params for slicing and trimming the mp3 file before splitting
+        # TODO: add config params such as INPUT_THRESHOLD or INPUT_MINIMUM_LENGTH
+        self.length = len(self.audio) / self.sample_rate # length of audio file in seconds
+
+def split(file_path):
+    ...
 
 def main():
     # Import and read ---------------------------

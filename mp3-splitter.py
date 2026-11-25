@@ -13,20 +13,79 @@ INPUT_MINIMUM_LENGTH = 1/10 # seconds
 
 class AudioSplitter:
     """
-    Splits an mp3 audio file containing speech into a number of individual mp3 chunks. Splits are optimized for the silent intervals between words.
+    Splits an mp3 audio file containing speech into a number of individual mp3 chunks. Splits are optimized for silent intervals between words.
+    
     Args:
-        n_chunks: Number of individual chunks. Integer value.
+        num_chunks: Number of individual chunks. Integer value.
         max_chunk_duration: Maximum duration of each chunk. Float value in seconds.
     """
-    def __init__(self, file_path: str|Path, *, n_chunks: int|None=None, max_chunk_duration: float|None=None):
+    def __init__(self, file_path: str|Path, *, num_chunks: int|None=None, max_chunk_duration: float|None=None):
         self.file_path = file_path
         self.audio, self.sample_rate = sf.read(self.file_path)
-        # TODO: add params for slicing and trimming the mp3 file before splitting
-        # TODO: add config params such as INPUT_THRESHOLD or INPUT_MINIMUM_LENGTH
         self.length = len(self.audio) / self.sample_rate # length of audio file in seconds
 
-def split(file_path):
+def split_audio(file_path: str|Path, *, num_chunks: int|None=None, max_chunk_duration: float|None=None, time_start: float=0, time_end: float|None=None, SILENCE_THRESHOLD: float=-60, RMS_MOVING_AVG: int|None=None, MIN_SILENCE_DURATION: float=1/10):
+    """
+    Splits an mp3 audio file containing speech into a number of individual mp3 chunks. Splits are optimized for silent intervals between words. The mp3 file may be trimmed to an audio slice prior to splitting.
+    
+    Args:
+        num_chunks: Number of individual chunks. Integer value.
+        max_chunk_duration: Maximum duration of each chunk. Float value in seconds.
+        
+        time_start: Start time of trimmed audio slice. Float value in seconds.
+        time_end: End time of trimmed audio slice. Float value in seconds.
+
+        SILENCE_THRESHOLD: Definition of max sound intensity for silent periods. Float value in decibel (dB).
+        RMS_MOVING_AVG: Number of samples used for moving average when calculating root mean square (rms). Integer value defaulting to sample_rate/100.
+        MIN_SILENCE_DURATION: Minimum duration of silence that will be considered for potential splitting. Float value in seconds defaulting to 1/10.
+
+    Returns: 
+        bingo bongo
+    """
+    audio, sample_rate = load_file(file_path) # TODO: implement option of passing AudioData or AudioData_2d variable
+
+    # TODO: refactor this as a separate function?
+    if RMS_MOVING_AVG is None:
+        RMS_MOVING_AVG = int(round(sample_rate / 100)) # TODO: this is a little weird
+
+    # slice audio and convert to ndarray
+    idx_start = time_start * sample_rate
+    if time_end is None:
+        idx_end = len(audio)
+        time_end = idx_end / sample_rate
+    else:
+        idx_end = time_end * sample_rate
+    slice_duration = time_end - time_start # duration of audio slice in seconds
+    audio_slice = audio.T[0,idx_start:idx_end]
+    t_slice = np.linspace(0, slice_duration, len(audio_slice))
+
+    audio_slice_rms =  np.sqrt(np.convolve(audio_slice**2, np.ones(INPUT_RMS)/INPUT_RMS, mode="same"))
+    audio_slice_dB = 20 * np.log10(audio_slice_rms)
+
+    # TODO: find all periods below silence threshold
+
+    # TODO: add plot
+
+    # TODO: implement splitter algorithms
+
+    # TODO: adjust obtained splits
+    #   |
+    # TODO: add beep at each split
+
+    # TODO: split and output mp3 chunks
+    
     ...
+
+def load_file(file_path: str|Path):
+    audio, sample_rate = sf.read(file_path)
+    audio_length = len(audio) / sample_rate # length of audio file in seconds
+    print(f'Length of mp3 file: {np.round(audio_length, decimals=2)} seconds ({np.floor(audio_length/60):.0f} min {round(audio_length%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
+    # TODO: add logic for print when length < 1 sec and when length > 60 min
+    return audio, sample_rate #, audio_length
+
+###############################################################
+# OLD CODE BELOW THIS POINT
+###############################################################
 
 def main():
     # Import and read ---------------------------

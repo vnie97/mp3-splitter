@@ -45,7 +45,7 @@ def split_audio(file_path: str|Path, *, num_chunks: int|None=None, max_chunk_dur
     audio, sample_rate = _load_file(file_path)
     
     # trim and convert to dB
-    audio_slice_rms, audio_slice_dB = _process_audio(audio, sample_rate, time_start, time_end, RMS_MOVING_AVG) # trim and convert to dB
+    audio_slice_rms, audio_slice_dB, t_slice = _process_audio(audio, sample_rate, time_start, time_end, RMS_MOVING_AVG) # trim and convert to dB
 
     # TODO: find all periods below silence threshold
 
@@ -63,34 +63,42 @@ def split_audio(file_path: str|Path, *, num_chunks: int|None=None, max_chunk_dur
 
 def _load_file(file_path: str|Path):
     audio, sample_rate = sf.read(file_path)
-    audio_duration = len(audio) / sample_rate # length of audio file in seconds
-    print(f'Duration of mp3 file: {np.round(audio_duration, decimals=2)} seconds ({np.floor(audio_duration/60):.0f} min {round(audio_duration%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
-    # TODO: add logic for print when length < 1 sec and when length > 60 min
-    return audio, sample_rate #, audio_length
+    audio_duration = len(audio) / sample_rate # duration of audio file in seconds
+    print("Duration of mp3 file:") #{np.round(audio_duration, decimals=2)} seconds ({np.floor(audio_duration/60):.0f} min {round(audio_duration%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
+    _print_duration(audio_duration, sample_rate)
+    return audio, sample_rate
 
 def _process_audio(audio: sf.AudioData|sf.AudioData_2d, sample_rate: int, time_start: float=0, time_end: float|None=None, RMS_MOVING_AVG: int|None=None):
     if RMS_MOVING_AVG is None:
             RMS_MOVING_AVG = round(sample_rate / 100)
 
     # trim audio and convert to ndarray
-    idx_start = time_start * sample_rate
     if time_end is None:
         idx_end = len(audio)
         time_end = idx_end / sample_rate
     else:
         idx_end = time_end * sample_rate
-    
+        if idx_end > len(audio):
+            idx_end = len(audio)
+    idx_start = time_start * sample_rate
     slice_duration = time_end - time_start # duration of audio slice in seconds
-    # TODO: print duration of trimmed mp3 file (slice)
 
     audio_slice = audio.T[0,idx_start:idx_end]
     t_slice = np.linspace(0, slice_duration, len(audio_slice))
 
+    if idx_start != 0 and idx_end != len(audio):
+            print("Duration of trimmed mp3 file:")
+            _print_duration(slice_duration, sample_rate)
+
     # calculate moving RMS envelope of the audio signal and convert amplitude to decibel (dB)
     audio_slice_rms =  np.sqrt(np.convolve(audio_slice**2, np.ones(RMS_MOVING_AVG)/RMS_MOVING_AVG, mode="same"))
     audio_slice_dB = 20 * np.log10(audio_slice_rms) # convert amplitude to decibel (dB)
-    return audio_slice_rms, audio_slice_dB
+    return audio_slice_rms, audio_slice_dB, t_slice
 
+def _print_duration(audio_duration, sample_rate: int) -> None:
+    # TODO: add logic for print when duration < 1 sec and when duration > 60 min
+    print(f'{np.round(audio_duration, decimals=2)} seconds ({np.floor(audio_duration/60):.0f} min {round(audio_duration%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
+    
 ###############################################################
 # OLD CODE BELOW THIS POINT
 ###############################################################

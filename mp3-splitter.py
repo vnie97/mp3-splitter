@@ -42,25 +42,10 @@ def split_audio(file_path: str|Path, *, num_chunks: int|None=None, max_chunk_dur
     Returns: 
         bingo bongo
     """
-    audio, sample_rate = load_file(file_path) # TODO: implement option of passing AudioData or AudioData_2d variable
-
-    # TODO: refactor this as a separate function?
-    if RMS_MOVING_AVG is None:
-        RMS_MOVING_AVG = int(round(sample_rate / 100)) # TODO: this is a little weird
-
-    # slice audio and convert to ndarray
-    idx_start = time_start * sample_rate
-    if time_end is None:
-        idx_end = len(audio)
-        time_end = idx_end / sample_rate
-    else:
-        idx_end = time_end * sample_rate
-    slice_duration = time_end - time_start # duration of audio slice in seconds
-    audio_slice = audio.T[0,idx_start:idx_end]
-    t_slice = np.linspace(0, slice_duration, len(audio_slice))
-
-    audio_slice_rms =  np.sqrt(np.convolve(audio_slice**2, np.ones(INPUT_RMS)/INPUT_RMS, mode="same"))
-    audio_slice_dB = 20 * np.log10(audio_slice_rms)
+    audio, sample_rate = _load_file(file_path)
+    
+    # trim and convert to dB
+    audio_slice_rms, audio_slice_dB = _process_audio(audio, sample_rate, time_start, time_end, RMS_MOVING_AVG) # trim and convert to dB
 
     # TODO: find all periods below silence threshold
 
@@ -69,19 +54,42 @@ def split_audio(file_path: str|Path, *, num_chunks: int|None=None, max_chunk_dur
     # TODO: implement splitter algorithms
 
     # TODO: adjust obtained splits
-    #   |
-    # TODO: add beep at each split
+
+    # TODO: add short beep at each split
 
     # TODO: split and output mp3 chunks
     
     ...
 
-def load_file(file_path: str|Path):
+def _load_file(file_path: str|Path):
     audio, sample_rate = sf.read(file_path)
-    audio_length = len(audio) / sample_rate # length of audio file in seconds
-    print(f'Length of mp3 file: {np.round(audio_length, decimals=2)} seconds ({np.floor(audio_length/60):.0f} min {round(audio_length%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
+    audio_duration = len(audio) / sample_rate # length of audio file in seconds
+    print(f'Duration of mp3 file: {np.round(audio_duration, decimals=2)} seconds ({np.floor(audio_duration/60):.0f} min {round(audio_duration%60, ndigits=1)} sec)\nSample rate:', sample_rate, 'Hz')
     # TODO: add logic for print when length < 1 sec and when length > 60 min
     return audio, sample_rate #, audio_length
+
+def _process_audio(audio: sf.AudioData|sf.AudioData_2d, sample_rate: int, time_start: float=0, time_end: float|None=None, RMS_MOVING_AVG: int|None=None):
+    if RMS_MOVING_AVG is None:
+            RMS_MOVING_AVG = round(sample_rate / 100)
+
+    # trim audio and convert to ndarray
+    idx_start = time_start * sample_rate
+    if time_end is None:
+        idx_end = len(audio)
+        time_end = idx_end / sample_rate
+    else:
+        idx_end = time_end * sample_rate
+    
+    slice_duration = time_end - time_start # duration of audio slice in seconds
+    # TODO: print duration of trimmed mp3 file (slice)
+
+    audio_slice = audio.T[0,idx_start:idx_end]
+    t_slice = np.linspace(0, slice_duration, len(audio_slice))
+
+    # calculate moving RMS envelope of the audio signal and convert amplitude to decibel (dB)
+    audio_slice_rms =  np.sqrt(np.convolve(audio_slice**2, np.ones(RMS_MOVING_AVG)/RMS_MOVING_AVG, mode="same"))
+    audio_slice_dB = 20 * np.log10(audio_slice_rms) # convert amplitude to decibel (dB)
+    return audio_slice_rms, audio_slice_dB
 
 ###############################################################
 # OLD CODE BELOW THIS POINT
@@ -137,14 +145,14 @@ def main():
 def count_below_treshold(data: np.ndarray, threshold=INPUT_THRESHOLD, min_length: float = 0):
     data_below_treshold = data < threshold # find values below treshold
     change_bool = data_below_treshold[1:] != data_below_treshold[:-1] # find bool value changes ('edges')
-    change_bool_with_markers = np.concat([[data_below_treshold[0]], change_bool, [data_below_treshold[-1]]]) # add start and end markers for calculating difference in indices; if start value is false, null marker is inserted
+    change_bool_with_markers = np.concat([[data_below_treshold[0]], change_bool, [data_below_treshold[-1]]]) # add start and end markers for calculating difference in indices; if start value is "False", a null marker is inserted
     # print(len(change_bool_with_markers))
     # print(change_bool_with_markers)
     # print('-----')
     change_bool_idxs = np.flatnonzero(change_bool_with_markers) # returns indices of bool value changes
     change_bool_diff = np.diff(change_bool_idxs) # obtain length of each group of bool values
     
-    # removing false groups/runs and corresponding indices
+    # removing "False" groups/runs and their corresponding indices
     change_bool_true_len = change_bool_diff[::2]
     change_bool_true_idxs = change_bool_idxs[::2]
 
